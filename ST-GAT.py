@@ -10,6 +10,8 @@ import time
 import os
 import csv
 import copy
+import argparse
+import configparser
 from torchsummaryX import summary
 os.environ['CUDA_LAUNCH_BLOCKING']='1'
 torch.manual_seed(10)
@@ -17,135 +19,119 @@ np.random.seed(10)
 
 device = torch.device('cuda:0')
 
+args = argparse.ArgumentParser(description='args')
+args.add_argument('--mode', default='train', type=str)
+args.add_argument('--conf', type=str)
+args_string = args.parse_args()
+print(args)
+try:
+    config = configparser.ConfigParser()
+    config.read(args_string.conf)
+except:
+    print("Config is not exist!")
+    print(args_string.conf)
+    exit()
+
 #If you need to change the data, change the two lines below
-data_name = 'pems-m'
-node_num = 228                 # d4: 307, metr-la: 207, bay: 325, seoul_highway: 468
+args.add_argument('--data', default=config['data']['dataset'], type=str)
+args.add_argument('--seg_num', default=config['data']['seg_num'], type=int)                 # d4: 307, metr-la: 207, bay: 325
+args.add_argument('--saved_model', type=str)
 
 #Model params
-input_time = 12
-input_feature = 1
-embedding_feature = 16
-GCN_feature = 64
-prediction_step = 12
+args.add_argument('--input_time', default=config['data']['input_time'], type=int)
+args.add_argument('--input_feature', default=config['data']['input_feature'], type=int)
+args.add_argument('--con_feature', default=config['model']['context_feature'], type=int)
+args.add_argument('--emb_feature', default=config['model']['embed_feature'], type=int)
+args.add_argument('--prediction_step', default=config['data']['prediction_step'], type=int)
 
 #Hyper params
-train_epoch = 300
-batch_size = 32
-learning_rate = 0.001
-dropout_ratio = 0.5
-early_stop_patient = 20
+args.add_argument('--train_epoch', default=config['train']['train_epoch'], type=int)
+args.add_argument('--batch_size', default=config['train']['batch_size'], type=int)
+args.add_argument('--learning_rate', default=config['train']['learning_rate'], type=float)
+args.add_argument('--dropout_ratio', default=config['train']['dropout_ratio'], type=float)
+args.add_argument('--early_stop_patient', default=config['train']['early_stop_patient'], type=int)
+args = args.parse_args()
 
-load_model = False
+if args.saved_model:
+    load_model = True
+else:
+    load_model = False
+
+if args.mode=='test':
+    t_epoch = 0
+else:
+    t_epoch=args.train_epoch
+
 
 #Paths
 log_file = 'log.txt'
 
-datafile = './data/window_'+data_name+'.npz'
-data_array, scaler = data_load(datafile, node_num)              ##########
+datafile = './data/window_'+args.data+'.npz'
+data_array, scaler = data_load(datafile, args.seg_num, args.input_time, args.prediction_step)              ##########
 
 utcnow = datetime.datetime.utcnow()
 now = utcnow + datetime.timedelta(hours=9)
 
 if not os.path.isdir('./out/'):                                                           
     os.mkdir('./out/')
-out_path = './out/data_{}_ep_{}_bs_{}_lr_{}_dr_{}_er_{}_bn_ln'.format(data_name,train_epoch, batch_size, learning_rate, dropout_ratio, early_stop_patient) + now.strftime('_%y%m%d_%H%M%S')
+out_path = './out/data_{}_ep_{}_bs_{}_lr_{}_dr_{}_er_{}_bn_ln'.format(args.data,args.train_epoch, args.batch_size, args.learning_rate, args.dropout_ratio, args.early_stop_patient) + now.strftime('_%y%m%d_%H%M%S')
 if not os.path.isdir(out_path):                                                           
     os.mkdir(out_path)
 
-print('Parameters: \n data: {}\n epoch: {}\n batch: {}\n lr_rate: {}\n dropout_ratio: {}\n patient: {}\n'.format(data_name,train_epoch, batch_size, learning_rate, dropout_ratio, early_stop_patient))
+print('Parameters: \n data: {}\n epoch: {}\n batch: {}\n lr_rate: {}\n args.dropout_ratio: {}\n patient: {}\n'.format(args.data,args.train_epoch, args.batch_size, args.learning_rate, args.dropout_ratio, args.early_stop_patient))
 
 #Our Traffic prediction Model
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.node_embeddings = nn.Parameter(torch.FloatTensor(node_num * input_time, embedding_feature))
-        self.GCN_weight = nn.Parameter(torch.FloatTensor(embedding_feature, input_feature, GCN_feature))
-        self.GCN_bias = nn.Parameter(torch.FloatTensor(embedding_feature, GCN_feature))
-        self.bn1 = nn.BatchNorm1d(node_num * input_time)
-        self.bn2 = nn.BatchNorm1d(node_num)
-        # self.ln1 = nn.LayerNorm([node_num, input_time, GCN_feature])
-        self.ln1 = nn.LayerNorm([node_num*input_time, GCN_feature])
-        self.ln2 = nn.LayerNorm([node_num*input_time, GCN_feature])
-        # self.ln_train = nn.LayerNorm([int(data_array.shape[0]*0.7 % batch_size), node_num * input_time, GCN_feature])
-        # self.ln_val = nn.LayerNorm([int(data_array.shape[0]*0.1 % batch_size), node_num * input_time, GCN_feature])
-        # self.ln_test = nn.LayerNorm([int(data_array.shape[0]*0.2 % batch_size), node_num * input_time, GCN_feature])
-        # self.ln1 = nn.LayerNorm([node_num * input_time, GCN_feature])
-        # self.GCN_weight2 = nn.Parameter(torch.FloatTensor(embedding_feature, GCN_feature, GCN_feature))
-        # self.GCN_bias2 = nn.Parameter(torch.FloatTensor(embedding_feature, GCN_feature))
-        # self.gru = nn.GRU(input_size=GCN_feature, hidden_size=GCN_feature, batch_first=True, num_layers=1)
-        # self.FC_weight = nn.Parameter(torch.FloatTensor(GCN_feature, input_time))
-        # self.FC_bias = nn.Parameter(torch.FloatTensor(input_time))
-        self.FC = nn.Linear((input_time*GCN_feature), int((GCN_feature*input_time)/3))
-        self.FC3 = nn.Linear(int((GCN_feature*input_time)/3), 12)
-        self.AttFC = nn.Linear(GCN_feature,GCN_feature)
+        self.node_cons = nn.Parameter(torch.FloatTensor(args.seg_num * args.input_time, args.con_feature))
+        self.context_weight = nn.Parameter(torch.FloatTensor(args.con_feature, args.input_feature, args.emb_feature))
+        self.context_bias = nn.Parameter(torch.FloatTensor(args.con_feature, args.emb_feature))
+        self.bn1 = nn.BatchNorm1d(args.seg_num * args.input_time)
+        self.bn2 = nn.BatchNorm1d(args.seg_num)
+        self.FC = nn.Linear((args.input_time*args.emb_feature), int((args.emb_feature*args.input_time)/3))
+        self.FC2 = nn.Linear(int((args.emb_feature*args.input_time)/3), args.prediction_step)
+        self.AttFC = nn.Linear(args.emb_feature,args.emb_feature)
         self.ReLU = nn.ReLU()
-        # self.FC_weight2 = nn.Parameter(torch.FloatTensor(node_num, GCN_feature, 1))
-        # self.FC_bias2 = nn.Parameter(torch.FloatTensor(node_num, 1))
-        # self.query = nn.Linear(GCN_feature, GCN_feature, bias=False)
-        # self.key = nn.Linear(GCN_feature, GCN_feature, bias=False)
-        # self.value = nn.Linear(GCN_feature, GCN_feature, bias=False)
-        self.att = nn.MultiheadAttention(GCN_feature, 2)
-        self.telayer = nn.TransformerEncoderLayer(d_model=GCN_feature, nhead=2, batch_first=True)
+        self.telayer = nn.TransformerEncoderLayer(d_model=args.emb_feature, nhead=2, batch_first=True)
         self.te = nn.TransformerEncoder(self.telayer, 1)
-        nn.init.kaiming_normal_(self.node_embeddings)
-        nn.init.kaiming_normal_(self.GCN_weight)
-        nn.init.kaiming_normal_(self.GCN_bias)
-        self.masking = torch.from_numpy(mask_(node_num, input_time))
-        # nn.init.kaiming_normal_(self.GCN_weight2)
-        # nn.init.kaiming_normal_(self.GCN_bias2)
-        # nn.init.kaiming_normal_(self.FC_weight2)
-        # nn.init.kaiming_normal_(self.FC_bias2)
+        nn.init.kaiming_normal_(self.node_cons)
+        nn.init.kaiming_normal_(self.context_weight)
+        nn.init.kaiming_normal_(self.context_bias)
+        self.masking = torch.from_numpy(mask_(args.seg_num, args.input_time))
 
     def forward(self, x):
         x = x.to(device)
-        w = torch.FloatTensor(1).to(device)
-        do = torch.nn.Dropout(p=dropout_ratio)
-        gcn_weights = torch.einsum('ij,jkl->ikl', self.node_embeddings, self.GCN_weight)
-        gcn_bias = self.node_embeddings.matmul(self.GCN_bias)
-        x2 = torch.einsum('bij,ijk->bik', x, gcn_weights) + gcn_bias
-        x2 = self.bn1(x2)
-        x = do(F.relu(x2)) + x
-        # x = torch.transpose(x, 0, 1)
-        # z = torch.cat((x, self.node_embeddings.expand(x.shape[0], -1, -1)), dim=2)
-        # z = torch.transpose(self.node_embeddings.expand(x.shape[0], -1, -1), 0, 1)
-        # output, w = self.att(x, x, x, attn_mask = self.masking.to(device))
+        do = torch.nn.Dropout(p=args.dropout_ratio)
+        cwpl_weights = torch.einsum('ij,jkl->ikl', self.node_cons, self.context_weight)
+        cwpl_bias = self.node_cons.matmul(self.context_bias)
+        x = torch.einsum('bij,ijk->bik', x, cwpl_weights) + cwpl_bias
+        x = self.bn1(x)
         output = self.te(x, mask=self.masking.to(device))
-        # output = torch.transpose(output, 0, 1)
-        # output = torch.matmul(w, x)
-        # output = self.ln1(output)
-        # output = F.relu(output)  # GCN
-        # output = do(output)
-        output = torch.reshape(output, (-1, input_time, node_num, GCN_feature))
+        output = torch.reshape(output, (-1, args.input_time, args.seg_num, args.emb_feature))
         output = torch.transpose(output, 1, 2)
-        output = torch.reshape(output, (-1, node_num, input_time*GCN_feature))
-
+        output = torch.reshape(output, (-1, args.seg_num, args.input_time * args.emb_feature))
         output = self.FC(output)
         output = self.bn2(output)
         output = self.ReLU(output)
-        # output = self.FC2(output)
-        # output = self.ReLU(output)
-        output = self.FC3(output)
+        output = self.FC2(output)
         output = torch.transpose(output, 1, 2)
-        output = torch.reshape(output, (-1, node_num * input_time, 1))
-        return output, w
+        output = torch.reshape(output, (-1, args.seg_num * args.prediction_step, 1))
+        return output
 
 
-def mask_(node_num, input_time):
-  masknp = np.empty((node_num*input_time, node_num*input_time))
+def mask_(seg_num, input_time):
+  masknp = np.empty((seg_num*input_time, seg_num*input_time))
   for i in range(input_time):
-    tmp = np.empty((node_num, input_time*node_num))
-    tmp[:, :(i+1)*node_num] = False
-    tmp[:, (i+1)*node_num:] = True
-    masknp[i*node_num:(i+1)*node_num, :] = tmp
+    tmp = np.empty((seg_num, input_time*seg_num))
+    tmp[:, :(i+1)*seg_num] = False
+    tmp[:, (i+1)*seg_num:] = True
+    masknp[i*seg_num:(i+1)*seg_num, :] = tmp
   return masknp.astype('bool')
 
 
 #Loss functions
-def mape(output, label):
-    return torch.mean(torch.abs(torch.div((label - output), label)))
-
-
-def MAPE_torch(pred, true, mask_value=0.):
+def mape(pred, true, mask_value=0.):
     if mask_value != None:
         mask = torch.gt(true, mask_value)
         pred = torch.masked_select(pred, mask)
@@ -174,30 +160,28 @@ def rmse(pred, true, mask_value=0.):
 torch.cuda.empty_cache()
 print(Net())
 net = Net()
-# net = nn.DataParallel(net)
 net.to(device)
 if load_model:
-    # net = torch.load('./out/data_Seoul_cityroad_511_ep_300_bs_32_lr_0.001_dr_0.5_er_20_bn_ln_210825_201433/bestmodel', map_location={'cuda:0':'cuda:0', 'cuda:1':'cuda:1', 'cuda:2':'cuda:2', 'cuda:3':'cuda:3'})
-    net = torch.load('./out/data_pems04_ep_300_bs_24_lr_0.001_dr_0.5_er_20_bn_ln_211015_165957/savedmodel_epoch_56')
+    net = torch.load(args.saved_model)
     net.to(device)
     print(net)
 criterion = mae
-optimizer = optim.Adam(net.parameters(), lr=learning_rate)
+optimizer = optim.Adam(net.parameters(), lr=args.learning_rate)
 
 ##Data loading
-dataloader = DataLoader(data_array[:int(len(data_array) * 0.7)], batch_size=batch_size, shuffle=True)
-val_dataloader = DataLoader(data_array[int(len(data_array) * 0.7):int(len(data_array) * 0.8)], batch_size=batch_size, shuffle=False)
-test_dataloader = DataLoader(data_array[int(len(data_array) * 0.8):], batch_size=batch_size, shuffle=False)
+dataloader = DataLoader(data_array[:int(len(data_array) * 0.7)], batch_size=args.batch_size, shuffle=True)
+val_dataloader = DataLoader(data_array[int(len(data_array) * 0.7):int(len(data_array) * 0.8)], batch_size=args.batch_size, shuffle=False)
+test_dataloader = DataLoader(data_array[int(len(data_array) * 0.8):], batch_size=args.batch_size, shuffle=False)
 train_log = open(os.path.join(out_path, log_file), 'w', newline='') #logfile
-# print(summary(net, (node_num*input_time, 1), batch_size=batch_size)) 
-#Model trainig Start
+
 wait = 0
 val_mae_min = np.inf
 best_model = copy.deepcopy(net.state_dict())
 train_maes, val_maes, test_maes = [], [], []
-for epoch in range(0, train_epoch):
-    
-    if wait >= early_stop_patient:
+
+for epoch in range(0, t_epoch):
+
+    if wait >= args.early_stop_patient:
         earlystop_log = 'Early stop at epoch: %04d' % (epoch)
         print(earlystop_log)
         train_log.write(earlystop_log + '\n')
@@ -218,21 +202,19 @@ for epoch in range(0, train_epoch):
         if batch_idx % 400 == 0:
             print(batch_idx, len(dataloader))
         optimizer.zero_grad()
-        input_x = samples[:, :, 0]
-        input_x = np.reshape(input_x, [-1, node_num * input_time, 1])
-        labels = samples[:, :, 1]
-        # labels = np.reshape(labels, [-1, node_num])
-        labels = torch.from_numpy(np.trunc(scaler.inverse_transform(labels)))
-        labels = np.reshape(labels, [-1, node_num * input_time])
+        input_x = samples[:, :args.seg_num * args.input_time]
+        input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, 1])
+        labels = samples[:, args.seg_num * args.input_time:]
+        labels = np.reshape(labels, [-1, args.seg_num * args.prediction_step])
         input_x, labels = input_x.to(device), labels.to(device)
-        outputs, adj = net(input_x)
-        outputs = torch.reshape(outputs, (-1, node_num * input_time))
+        outputs = net(input_x)
+        outputs = torch.reshape(outputs, (-1, args.seg_num * args.prediction_step))
         loss = criterion(outputs, labels)
         loss_sum += loss.item()
         loss.backward()
         mae_sum += np.nan_to_num(mae(outputs, labels.to(device)).item())
         rmse_sum += np.nan_to_num(rmse(outputs, labels.to(device)).item())
-        mape_step = np.nan_to_num(MAPE_torch(outputs, labels).item())
+        mape_step = np.nan_to_num(mape(outputs, labels).item())
         mape_sum += mape_step
         nn.utils.clip_grad_norm_(net.parameters(), 5)
         optimizer.step()
@@ -262,20 +244,18 @@ for epoch in range(0, train_epoch):
         cnt = 0
         for batch_idx, samples in enumerate(val_dataloader):
             optimizer.zero_grad()
-            input_x = samples[:, :, 0]
-            input_x = np.reshape(input_x, [-1, node_num * input_time, 1])
-            labels = samples[:, :, 1]
-            # labels = np.reshape(labels, [-1, node_num])
-            labels = torch.from_numpy(np.trunc(scaler.inverse_transform(labels)))
-            labels = np.reshape(labels, [-1, node_num * input_time])
+            input_x = samples[:, :args.seg_num * args.input_time]
+            input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, 1])
+            labels = samples[:, args.seg_num * args.input_time:]
+            labels = np.reshape(labels, [-1, args.seg_num * args.prediction_step])
             input_x, labels = input_x.to(device), labels.to(device)
-            outputs, adj = net(input_x)
-            outputs = torch.reshape(outputs, (-1, node_num * input_time))
+            outputs = net(input_x)
+            outputs = torch.reshape(outputs, (-1, args.seg_num * args.prediction_step))
             loss = criterion(outputs, labels)
             loss_sum += loss.item()
             mae_sum += np.nan_to_num(mae(outputs, labels.to(device)).item())
             rmse_sum += np.nan_to_num(rmse(outputs, labels.to(device)).item())
-            mape_step = np.nan_to_num(MAPE_torch(outputs, labels).item())
+            mape_step = np.nan_to_num(mape(outputs, labels).item())
             mape_sum += mape_step
             batch_num = batch_idx
         batch_num += 1
@@ -312,20 +292,19 @@ for epoch in range(0, train_epoch):
             cnt = 0
             for batch_idx, samples in enumerate(test_dataloader):
                 optimizer.zero_grad()
-                input_x = samples[:, :, 0]
-                input_x = np.reshape(input_x, [-1, node_num * input_time, 1])
-                labels = samples[:, :, 1]
-                # labels = np.reshape(labels, [-1, node_num])
-                labels = torch.from_numpy(np.trunc(scaler.inverse_transform(labels)))
-                labels = np.reshape(labels, [-1, node_num * input_time])
+                input_x = samples[:, :args.seg_num * args.input_time]
+                input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, 1])
+                labels = samples[:, args.seg_num * args.input_time:]
+                labels = np.reshape(labels, [-1, args.seg_num * args.prediction_step])
                 input_x, labels = input_x.to(device), labels.to(device)
-                outputs, adj = net(input_x)
-                outputs = torch.reshape(outputs, (-1, node_num * input_time))
+                outputs = net(input_x)
+                outputs = torch.reshape(outputs, (-1, args.seg_num * args.prediction_step))
+
                 loss = criterion(outputs, labels)
                 loss_sum += loss.item()
                 mae_sum += np.nan_to_num(mae(outputs, labels.to(device)).item())
                 rmse_sum += np.nan_to_num(rmse(outputs, labels.to(device)).item())
-                mape_step = np.nan_to_num(MAPE_torch(outputs, labels).item())
+                mape_step = np.nan_to_num(mape(outputs, labels).item())
                 mape_sum += mape_step
                 batch_num = batch_idx
             batch_num += 1
@@ -335,12 +314,9 @@ for epoch in range(0, train_epoch):
             test_log_str = ' test: %.5f\t\t%.5f\t\t%.5f' % (test_mae, rmse_sum / batch_num, mape_sum / batch_num)
             print(test_log_str)
             train_log.write(test_log_str + '\n')
-            # torch.save(net, os.path.join(out_path,'savedmodel_epoch_{}'.format(epoch)))            #####################################
-            # df = pd.DataFrame(adj.cpu().detach().numpy())
-            # df.to_csv(str(epoch)+'.csv', index=False)
             
 
-cw = csv.writer(open('./'+data_name+'.csv', 'w', newline=''))
+cw = csv.writer(open('./'+args.data+'.csv', 'w', newline=''))
 #Logging last test mae loss
 net.load_state_dict(best_model)
 with torch.no_grad():
@@ -352,64 +328,28 @@ with torch.no_grad():
     cnt = 0
     x_np = np.array([])
     y_np = np.array([])
-    # adj_mean = torch.zeros(input_time * node_num, input_time * node_num).to(device)
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
 
     start.record()
     for batch_idx, samples in enumerate(test_dataloader):
-        # print(samples.shape)
-        # if samples.shape[0] < 1:
-        #     continue
         optimizer.zero_grad()
-        input_x = samples[:, :, 0]
-        input_x = np.reshape(input_x, [-1, node_num * input_time, 1])
-        labels = samples[:, :, 1]
-        # labels = np.reshape(labels, [-1, node_num])
-        labels = torch.from_numpy(np.trunc(scaler.inverse_transform(labels)))
-        labels = np.reshape(labels, [-1, node_num * input_time])
+        input_x = samples[:, :args.seg_num * args.input_time]
+        input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, 1])
+        labels = samples[:, args.seg_num * args.input_time:]
+        labels = np.reshape(labels, [-1, args.seg_num * args.prediction_step])
         input_x, labels = input_x.to(device), labels.to(device)
-        print(summary(net,input_x))
-        outputs, adj = net(input_x)
-        outputs = torch.reshape(outputs, (-1, node_num * input_time))
-        # outputs = torch.reshape(outputs, (-1, input_time, node_num))[:, :prediction_step, :]
-        
-        # labels = torch.reshape(labels, (-1, input_time, node_num))[:, :prediction_step, :].to(device)
-        
-        # output_np = outputs.cpu().detach().numpy()
-        # labels_np = labels.cpu().detach().numpy()
-        # try:
-        #     x_np = np.concatenate((x_np, output_np), axis=0)
-        #     y_np = np.concatenate((y_np, labels_np), axis=0)
-        # except:
-        #     x_np = output_np
-        #     y_np = labels_np
-        # np.save('HY_pred.npy',output_np)
-        # np.save('HY_real.npy', labels_np)
-        # for l in range(0, len(output_np)):
-        #     line = np.concatenate((output_np[l], labels_np[l]))
-        #     cw.writerow(line)
- 
-        # adj_mean += torch.mean(adj, 0, True).squeeze()
-        # outputs = torch.reshape(outputs, (-1, node_num * input_time))
+        outputs = net(input_x)
+        outputs = torch.reshape(outputs, (-1, args.seg_num * args.prediction_step))
+
         loss = criterion(outputs, labels)
         loss_sum += loss.item()
         mae_sum += np.nan_to_num(mae(outputs, labels.to(device)).item())
         rmse_sum += np.nan_to_num(rmse(outputs, labels.to(device)).item())
-        mape_step = np.nan_to_num(MAPE_torch(outputs, labels).item())
+        mape_step = np.nan_to_num(mape(outputs, labels).item())
         mape_sum += mape_step
         batch_num = batch_idx
     batch_num += 1
-    # adj_mean = adj_mean / batch_idx
-    # adj_mean = adj_mean.cpu().detach().numpy()
-    # adj_0 = np.zeros((input_time, node_num))
-    # linknum = 15
-    # for i in range(0, 12):
-    #   for j in range(0, node_num):
-    #     adj_0[i,j] += np.sum(adj_mean[[linknum + k*node_num for k in range(0, 12)], i*node_num + j])
-    # cw = csv.writer(open('./att_'+str(linknum)+'_metr.csv', 'w', newline=''))
-    # for line in adj_0:
-    #   cw.writerow(line)
     test_log_str = ' Test: %.5f\t\t%.5f\t\t%.5f' % (mae_sum / batch_num, rmse_sum / batch_num, mape_sum / batch_num)
     print(test_log_str)
     end.record()
@@ -417,15 +357,19 @@ with torch.no_grad():
     np.save('HY_pred', x_np)
     np.save('HY_real', y_np)
     print('Testinng time: ', start.elapsed_time(end))
-#Logging top 3 val/test mae loss
-val_top3 = sorted(zip(val_maes, range(len(val_maes))))[:3]
-test_top3 = sorted(zip(test_maes, [i * 5 for i in range(len(test_maes))]))[:3]
-val_top3_log = \
-    'Validation top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (val_top3[0][0], val_top3[0][1], val_top3[1][0], val_top3[1][1], val_top3[2][0], val_top3[2][1])
-test_top3_log = \
-    'Test top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (test_top3[0][0], test_top3[0][1], test_top3[1][0], test_top3[1][1], test_top3[2][0], test_top3[2][1])
+    torch.save(net, os.path.join(out_path,'best_model'))
+    print('Best model saved')
 
-print(val_top3_log)
-print(test_top3_log)
-train_log.write(val_top3_log + '\n')
-train_log.write(test_top3_log + '\n')
+#Logging top 3 val/test mae loss
+if t_epoch > 3:
+    val_top3 = sorted(zip(val_maes, range(len(val_maes))))[:3]
+    test_top3 = sorted(zip(test_maes, [i * 5 for i in range(len(test_maes))]))[:3]
+    val_top3_log = \
+        'Validation top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (val_top3[0][0], val_top3[0][1], val_top3[1][0], val_top3[1][1], val_top3[2][0], val_top3[2][1])
+    test_top3_log = \
+        'Test top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (test_top3[0][0], test_top3[0][1], test_top3[1][0], test_top3[1][1], test_top3[2][0], test_top3[2][1])
+
+    print(val_top3_log)
+    print(test_top3_log)
+    train_log.write(val_top3_log + '\n')
+    train_log.write(test_top3_log + '\n')
