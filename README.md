@@ -8,7 +8,7 @@ This is an implementation of ST-GAT: Spatio-Temporal Graph Attention Network for
 
 
 # Datasets
-The preprocessed datasets are available at Google Drive.
+The processed datasets are available at Google Drive.
 * https://drive.google.com/drive/folders/13uLQ14vehR0ztrlbNwXelE7fioejuEcb?usp=sharing
 
 All datasets should be in './data'.
