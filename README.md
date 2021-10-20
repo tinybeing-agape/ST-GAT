@@ -22,7 +22,7 @@ All datasets should be in './data'.
 # Commands
 
     # Train
-    python ST-GAT.py --data=METR-LA --config=tmp
+    python ST-GAT.py --mode=train --data=METR-LA --config=tmp
   
     # Test
-    python ST-GAT.py --data=METR-LA --saved_model=tmp --config=tmp
+    python ST-GAT.py --mode=test --data=METR-LA --saved_model=tmp --config=tmp
