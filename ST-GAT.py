@@ -107,13 +107,14 @@ class Net(nn.Module):
         cwpl_bias = self.node_cons.matmul(self.context_bias)
         x = torch.einsum('bij,ijk->bik', x, cwpl_weights) + cwpl_bias
         x = self.bn1(x)
+        x = F.relu(x)
         output = self.te(x, mask=self.masking.to(device))
         output = torch.reshape(output, (-1, args.input_time, args.seg_num, args.emb_feature))
         output = torch.transpose(output, 1, 2)
         output = torch.reshape(output, (-1, args.seg_num, args.input_time * args.emb_feature))
         output = self.FC(output)
         output = self.bn2(output)
-        output = self.ReLU(output)
+        output = F.relu(output)
         output = self.FC2(output)
         output = torch.transpose(output, 1, 2)
         output = torch.reshape(output, (-1, args.seg_num * args.prediction_step, 1))
@@ -178,6 +179,8 @@ wait = 0
 val_mae_min = np.inf
 best_model = copy.deepcopy(net.state_dict())
 train_maes, val_maes, test_maes = [], [], []
+
+summary(net, torch.zeros((args.batch_size, args.input_time*args.seg_num, args.input_feature)))
 
 for epoch in range(0, t_epoch):
 
@@ -245,7 +248,7 @@ for epoch in range(0, t_epoch):
         for batch_idx, samples in enumerate(val_dataloader):
             optimizer.zero_grad()
             input_x = samples[:, :args.seg_num * args.input_time]
-            input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, 1])
+            input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, args.input_feature])
             labels = samples[:, args.seg_num * args.input_time:]
             labels = np.reshape(labels, [-1, args.seg_num * args.prediction_step])
             input_x, labels = input_x.to(device), labels.to(device)
@@ -293,7 +296,7 @@ for epoch in range(0, t_epoch):
             for batch_idx, samples in enumerate(test_dataloader):
                 optimizer.zero_grad()
                 input_x = samples[:, :args.seg_num * args.input_time]
-                input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, 1])
+                input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, args.input_feature])
                 labels = samples[:, args.seg_num * args.input_time:]
                 labels = np.reshape(labels, [-1, args.seg_num * args.prediction_step])
                 input_x, labels = input_x.to(device), labels.to(device)
@@ -335,7 +338,7 @@ with torch.no_grad():
     for batch_idx, samples in enumerate(test_dataloader):
         optimizer.zero_grad()
         input_x = samples[:, :args.seg_num * args.input_time]
-        input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, 1])
+        input_x = np.reshape(input_x, [-1, args.seg_num * args.input_time, args.input_feature])
         labels = samples[:, args.seg_num * args.input_time:]
         labels = np.reshape(labels, [-1, args.seg_num * args.prediction_step])
         input_x, labels = input_x.to(device), labels.to(device)
