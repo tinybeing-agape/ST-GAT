@@ -26,3 +26,7 @@ All datasets should be in './data'.
   
     # Test
     python ST-GAT.py --mode=test --data=METR-LA --saved_model=./out/metr-la/best_model --conf=./config/metr-la.conf
+
+
+# Experiments
+![image](https://user-images.githubusercontent.com/92875660/171132693-74119049-db87-4508-a2c2-7a1dde13d846.png)
