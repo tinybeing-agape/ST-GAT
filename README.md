@@ -31,4 +31,5 @@ All datasets should be in './data'.
 # Experiments
 
 Table: Training and inference time comparison.
+
 ![image](https://user-images.githubusercontent.com/92875660/171132693-74119049-db87-4508-a2c2-7a1dde13d846.png)
