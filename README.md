@@ -33,3 +33,23 @@ All datasets should be in './data'.
 Table: Training and inference time comparison.
 
 ![image](https://user-images.githubusercontent.com/92875660/171132693-74119049-db87-4508-a2c2-7a1dde13d846.png)
+
+
+# Authors
+
+Junho Song
+Jiwon Son
+Dong-hyuk Seo
+Kyungsik Han
+Namhyuk Kim
+Sang-Wook Kim
+
+# Cite
+We encourage you to cite our paper if you have used the code in your work. You can use the following BibTex citation:
+@inproceedings{song2022st,
+  title={ST-GAT: A Spatio-Temporal Graph Attention Network for Accurate Traffic Speed Prediction},
+  author={Song, Junho and Son, Jiwon and Seo, Dong-hyuk and Han, Kyungsik and Kim, Namhyuk and Kim, Sang-Wook},
+  booktitle={Proceedings of the 31st ACM International Conference on Information \& Knowledge Management},
+  pages={4500--4504},
+  year={2022}
+}
