@@ -37,12 +37,12 @@ Table: Training and inference time comparison.
 
 # Authors
 
-* Junho Song
-* Jiwon Son
-* Dong-hyuk Seo
-* Kyungsik Han
-* Namhyuk Kim
-* Sang-Wook Kim
+* Junho Song (junonjuno@bigdas.hanyang.ac.kr)
+* Jiwon Son (tinybeing@bigdas.hanyang.ac.kr)
+* Dong-hyuk Seo (hyuk125@bigdas.hanyang.ac.kr)
+* Kyungsik Han (kyungsikhan@hanyang.ac.kr)
+* Namhyuk Kim (namhyuk.kim@hyundai.com)
+* Sang-Wook Kim (wook@hanyang.ac.kr)
 
 # Cite
 We encourage you to cite our paper if you have used the code in your work. You can use the following BibTex citation:
