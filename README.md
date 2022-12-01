@@ -37,19 +37,20 @@ Table: Training and inference time comparison.
 
 # Authors
 
-Junho Song
-Jiwon Son
-Dong-hyuk Seo
-Kyungsik Han
-Namhyuk Kim
-Sang-Wook Kim
+* Junho Song
+* Jiwon Son
+* Dong-hyuk Seo
+* Kyungsik Han
+* Namhyuk Kim
+* Sang-Wook Kim
 
 # Cite
 We encourage you to cite our paper if you have used the code in your work. You can use the following BibTex citation:
-@inproceedings{song2022st,
-  title={ST-GAT: A Spatio-Temporal Graph Attention Network for Accurate Traffic Speed Prediction},
-  author={Song, Junho and Son, Jiwon and Seo, Dong-hyuk and Han, Kyungsik and Kim, Namhyuk and Kim, Sang-Wook},
-  booktitle={Proceedings of the 31st ACM International Conference on Information \& Knowledge Management},
-  pages={4500--4504},
-  year={2022}
-}
+
+    @inproceedings{song2022st,
+      title={ST-GAT: A Spatio-Temporal Graph Attention Network for Accurate Traffic Speed Prediction},
+      author={Song, Junho and Son, Jiwon and Seo, Dong-hyuk and Han, Kyungsik and Kim, Namhyuk and Kim, Sang-Wook},
+      booktitle={Proceedings of the 31st ACM International Conference on Information \& Knowledge Management},
+      pages={4500--4504},
+      year={2022}
+    }
