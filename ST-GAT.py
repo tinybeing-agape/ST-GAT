@@ -37,7 +37,7 @@ except:
     exit()
 
 #If you need to change the data, change the two lines below
-args.add_argument('--data', default=config['data']['dataset'], type=str)
+args.add_argument('--data', default=config['data']['dataset'], type=str)                    # pems04, metr-la, pems-bay
 args.add_argument('--seg_num', default=config['data']['seg_num'], type=int)                 # d4: 307, metr-la: 207, bay: 325
 args.add_argument('--saved_model', type=str)
 
@@ -369,14 +369,18 @@ with torch.no_grad():
 
 #Logging top 3 val/test mae loss
 if t_epoch > 3:
-    val_top3 = sorted(zip(val_maes, range(len(val_maes))))[:3]
-    test_top3 = sorted(zip(test_maes, [i * 5 for i in range(len(test_maes))]))[:3]
-    val_top3_log = \
-        'Validation top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (val_top3[0][0], val_top3[0][1], val_top3[1][0], val_top3[1][1], val_top3[2][0], val_top3[2][1])
-    test_top3_log = \
-        'Test top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (test_top3[0][0], test_top3[0][1], test_top3[1][0], test_top3[1][1], test_top3[2][0], test_top3[2][1])
+    try:
+        val_top3 = sorted(zip(val_maes, range(len(val_maes))))[:3]
+        test_top3 = sorted(zip(test_maes, [i * 5 for i in range(len(test_maes))]))[:3]
+        val_top3_log = \
+            'Validation top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (val_top3[0][0], val_top3[0][1], val_top3[1][0], val_top3[1][1], val_top3[2][0], val_top3[2][1])
+        test_top3_log = \
+            'Test top 3\n 1st: %.5f / %depoch\n 2st: %.5f / %depoch\n 3st: %.5f / %depoch' % (test_top3[0][0], test_top3[0][1], test_top3[1][0], test_top3[1][1], test_top3[2][0], test_top3[2][1])
 
-    print(val_top3_log)
-    print(test_top3_log)
-    train_log.write(val_top3_log + '\n')
-    train_log.write(test_top3_log + '\n')
+        print(val_top3_log)
+        print(test_top3_log)
+        train_log.write(val_top3_log + '\n')
+        train_log.write(test_top3_log + '\n')
+    except:
+        print('Trained less than 3 epoch')    
+        

@@ -7,12 +7,11 @@ def data_load(data, node_num, input_len, output_len):
     data_np = np.load(data)
     data_np = data_np['data'].astype('float32')
     print(data_np.shape)
-    # data_np = data_np.reshape(-1, node_num, 2)
+
     scaler.fit(data_np[:, 12-input_len:, 0])
     print(scaler)
     out_np = np.concatenate((scaler.transform(data_np[:, (12-input_len)*node_num:, 0]),data_np[:, :node_num*output_len, 1]), axis=1)
     print(out_np.shape)
-    # data_np = data_np.reshape(-1, node_num*12, 2)
 
     return out_np, scaler
 
