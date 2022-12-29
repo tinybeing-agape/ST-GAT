@@ -37,7 +37,7 @@ except:
     exit()
 
 #If you need to change the data, change the two lines below
-args.add_argument('--data', default=config['data']['dataset'], type=str)
+args.add_argument('--data', default=config['data']['dataset'], type=str)                    # pems04, metr-la, pems-bay
 args.add_argument('--seg_num', default=config['data']['seg_num'], type=int)                 # d4: 307, metr-la: 207, bay: 325
 args.add_argument('--saved_model', type=str)
 
