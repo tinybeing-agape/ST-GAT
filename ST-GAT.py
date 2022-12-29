@@ -19,14 +19,18 @@ np.random.seed(10)
 
 device = torch.device('cuda:0')
 
+class UserNamespace(object):
+    pass
+user_namespace = UserNamespace()
+
 args = argparse.ArgumentParser(description='args')
 args.add_argument('--mode', default='train', type=str)
 args.add_argument('--conf', type=str)
-args_string = args.parse_args()
+args_string = args.parse_args(namespace=user_namespace)
 print(args)
 try:
     config = configparser.ConfigParser()
-    config.read(args_string.conf)
+    config.read(ser_namespace.conf, encoding='utf-8')
 except:
     print("Config is not exist!")
     print(args_string.conf)
@@ -50,7 +54,7 @@ args.add_argument('--batch_size', default=config['train']['batch_size'], type=in
 args.add_argument('--learning_rate', default=config['train']['learning_rate'], type=float)
 args.add_argument('--dropout_ratio', default=config['train']['dropout_ratio'], type=float)
 args.add_argument('--early_stop_patient', default=config['train']['early_stop_patient'], type=int)
-args = args.parse_args()
+args = args.parse_args(namespace = user_namespace)
 
 if args.saved_model:
     load_model = True
