@@ -86,7 +86,7 @@ print('Parameters: \n data: {}\n epoch: {}\n batch: {}\n lr_rate: {}\n args.drop
 
 #Our Traffic prediction Model
 class Net(nn.Module):
-    def __init__(self):
+    def __init__(self):                                                                             # model parameters
         super(Net, self).__init__()
         self.node_cons = nn.Parameter(torch.FloatTensor(args.seg_num * args.input_time, args.con_feature))
         self.context_weight = nn.Parameter(torch.FloatTensor(args.con_feature, args.input_feature, args.emb_feature))
@@ -104,7 +104,7 @@ class Net(nn.Module):
         nn.init.kaiming_normal_(self.context_bias)
         self.masking = torch.from_numpy(mask_(args.seg_num, args.input_time))
 
-    def forward(self, x):
+    def forward(self, x):                                                                           # model architecture
         x = x.to(device)
         do = torch.nn.Dropout(p=args.dropout_ratio)
         cwpl_weights = torch.einsum('ij,jkl->ikl', self.node_cons, self.context_weight)
