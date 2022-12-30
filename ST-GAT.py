@@ -184,9 +184,9 @@ val_mae_min = np.inf
 best_model = copy.deepcopy(net.state_dict())
 train_maes, val_maes, test_maes = [], [], []
 
-summary(net, torch.zeros((args.batch_size, args.input_time*args.seg_num, args.input_feature)))
+summary(net, torch.zeros((args.batch_size, args.input_time*args.seg_num, args.input_feature)))         # print model summary
 
-for epoch in range(0, t_epoch):
+for epoch in range(0, t_epoch):                                                                        # training model (t_epoch)
 
     if wait >= args.early_stop_patient:
         earlystop_log = 'Early stop at epoch: %04d' % (epoch)
