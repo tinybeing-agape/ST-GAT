@@ -71,12 +71,12 @@ else:
 log_file = 'log.txt'
 
 datafile = './data/window_'+args.data+'.npz'
-data_array, scaler = data_load(datafile, args.seg_num, args.input_time, args.prediction_step)              ##########
+data_array, scaler = data_load(datafile, args.seg_num, args.input_time, args.prediction_step)              # load data
 
 utcnow = datetime.datetime.utcnow()
 now = utcnow + datetime.timedelta(hours=9)
 
-if not os.path.isdir('./out/'):                                                           
+if not os.path.isdir('./out/'):                                                                            # output path
     os.mkdir('./out/')
 out_path = './out/data_{}_ep_{}_bs_{}_lr_{}_dr_{}_er_{}_bn_ln'.format(args.data,args.train_epoch, args.batch_size, args.learning_rate, args.dropout_ratio, args.early_stop_patient) + now.strftime('_%y%m%d_%H%M%S')
 if not os.path.isdir(out_path):                                                           
